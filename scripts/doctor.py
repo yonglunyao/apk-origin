@@ -46,6 +46,7 @@ def main():
     checks.append(("插件内置 apksigner.bat", (bt_dir / "apksigner.bat").is_file(), str(bt_dir / "apksigner.bat")))
     checks.append(("插件内置 apksigner.jar", (bt_dir / "lib" / "apksigner.jar").is_file(),
                    str(bt_dir / "lib" / "apksigner.jar")))
+    checks.append(("插件内置 dexdump.exe", (bt_dir / "dexdump.exe").is_file(), str(bt_dir / "dexdump.exe")))
     dlls = ["libLLVM_android.dll", "libclang_android.dll", "libbcc.dll", "libbcinfo.dll", "libwinpthread-1.dll"]
     missing_dll = [d for d in dlls if not (bt_dir / d).is_file()]
     checks.append(("插件内置 runtime dll (5个)", not missing_dll,

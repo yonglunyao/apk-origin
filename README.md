@@ -13,7 +13,7 @@
 **方式 A — 从 GitHub 安装**（已含 `.claude-plugin/marketplace.json`，支持 marketplace 安装）：
 
 ```bash
-# 在 Claude Code 内（替换 yonglunyao 为实际仓库 owner）
+# 在 Claude Code 内
 /plugin marketplace add yonglunyao/apk-origin
 /plugin install apk-origin@apk-origin-market
 
@@ -22,7 +22,7 @@ claude plugin marketplace add yonglunyao/apk-origin
 claude plugin install apk-origin@apk-origin-market
 ```
 
-> 部署前：把 `.claude-plugin/plugin.json`、`.claude-plugin/marketplace.json` 里的 `yonglunyao` 替换为实际 GitHub 用户名，push 到 GitHub。
+> Fork 二次开发时：把 `plugin.json` / `marketplace.json` 里的 `yonglunyao` 替换为你自己的 GitHub 用户名。
 
 **方式 B — 本地加载**（开发/测试）：
 
@@ -47,6 +47,7 @@ python D:/temp/apk-analyse/apk-origin/scripts/doctor.py
 | google-search | 主搜索（英文） | https://aistudio.google.com/apikey |
 | WebSearch（百炼） | 中文补充 | https://bailian.console.aliyun.com |
 | web-reader + zread | 网页 / GitHub 读取（共用智谱 key） | https://open.bigmodel.cn |
+| frida-mobile-mcp | 动态验证（可选，npx 自取无需 key） | — |
 
 未配置时 Agent A/I 联网降级，代码层分析不受影响。
 
@@ -130,7 +131,7 @@ skill base 目录（SKILL.md 所在目录）上溯两级即插件根，所有工
 
 ### 未内置说明
 - **jadx / mobile-security skill**：原 skill 文档提及的辅助 skill 当前系统无源，未打包；apk_extract.py 已自包含核心提取能力。
-- **readelf / nm / strings**：apk_extract.py 内置二进制扫描替代，非必需。
+- **readelf / nm / strings / objdump**：插件**已内置**（`bin/ndk-tools/`，LLVM），.so 符号表分析必需（Flutter `libapp.so`）；apk_extract.py 另内置基础字符串扫描。
 
 ---
 
@@ -161,7 +162,7 @@ cd D:/temp/apk-analyse
 Compress-Archive -Path apk-origin -DestinationPath apk-origin.zip
 ```
 
-体积约 156M（含 jadx + build-tools + ndk-tools 二进制）。
+`bin/` 二进制约 156M（jadx 61M + build-tools 52M + ndk-tools 43M）；含 `.git` 全仓库约 250M，打包分发前可排除 `.git`。
 
 ---
 

@@ -105,7 +105,7 @@ def get_meta(apk, bt_dir):
         m = re.search(pat, out, re.M)
         meta[k] = m.group(1) if m else ""
     meta["permissions"] = sorted(set(
-        re.findall(r"uses-permission(?:-sdk-\d+)?:name='([^']+)'", out)))
+        re.findall(r"uses-permission(?:-sdk-\d+)?:\s*name='([^']+)'", out)))
     return meta
 
 

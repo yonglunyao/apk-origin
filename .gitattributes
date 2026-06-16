@@ -1,0 +1,18 @@
+# 默认文本文件用 LF（跨平台一致，避免 autocrlf 破坏 sh 脚本如 jadx）
+* text=auto eol=lf
+
+# Windows 批处理必须 CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# 二进制文件不做换行符转换
+*.exe binary
+*.dll binary
+*.jar binary
+*.so binary
+*.png binary
+*.jpg binary
+*.ttf binary
+*.prof binary
+*.profm binary

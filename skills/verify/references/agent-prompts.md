@@ -223,7 +223,7 @@ APK 路径：AG={ag_apk_path}，GP={gp_apk_path}
 ## 工具（插件内置，session 临时 PATH）
 
 每个 Bash 调用开头执行（env 不跨调用，故每次重设；不写用户环境变量）：
-  PLUGIN_ROOT="<skill_base>/../.."
+  PLUGIN_ROOT="$(cd "<skill_base>/../.." && pwd)"
   export PATH="$PLUGIN_ROOT/bin/ndk-tools:$PATH"
 此后 strings / readelf / nm / objdump 在该 Bash 内直接可用。从 APK 提取 .so 用 unzip（Git Bash 自带）或 Python zipfile。
 
@@ -273,7 +273,7 @@ APK 路径：AG={ag_apk_path}，GP={gp_apk_path}
 
 1. 检查 `strings.secrets` 字段（apk_extract.py 已自动提取 8 种敏感值模式）
 2. 对比两包的 secrets 差异（firebase_api_key/aws_access_key/jwt_token等）
-3. AG 独有的敏感值 → 用 jadx 定位出现在哪个类、做什么用
+3. AG 独有的敏感值 → grep Phase 0 已生成的 jadx 源码，定位出现在哪个类、做什么用
 4. 判定是"渠道差异换了合法 key"还是"加了不明 key"
 
 ## 输出格式
