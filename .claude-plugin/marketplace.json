@@ -1,0 +1,17 @@
+{
+  "name": "apk-origin-market",
+  "owner": {
+    "name": "Yonglun Yao",
+    "email": "yonglunyao@gmail.com"
+  },
+  "plugins": [
+    {
+      "name": "apk-origin",
+      "source": {
+        "source": "github",
+        "repo": "yonglunyao/apk-origin"
+      },
+      "description": "APK 跨渠道来源一致性核查（AppGallery vs Google Play），内置 jadx + Android build-tools + .so 分析工具链，检测仿冒/重打包/后门注入"
+    }
+  ]
+}

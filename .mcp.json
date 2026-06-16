@@ -1,0 +1,38 @@
+{
+  "mcpServers": {
+    "google-search": {
+      "command": "cmd",
+      "args": ["/c", "npx", "mcp-gemini-google-search"],
+      "env": {
+        "GEMINI_API_KEY": "<YOUR_GEMINI_API_KEY>"
+      }
+    },
+    "WebSearch": {
+      "type": "http",
+      "url": "https://dashscope.aliyuncs.com/api/v1/mcps/WebSearch/mcp",
+      "headers": {
+        "Authorization": "Bearer <YOUR_DASHSCOPE_API_KEY>"
+      }
+    },
+    "web-reader": {
+      "type": "http",
+      "url": "https://open.bigmodel.cn/api/mcp/web_reader/mcp",
+      "headers": {
+        "Authorization": "Bearer <YOUR_ZHIPUAI_API_KEY>"
+      }
+    },
+    "zread": {
+      "type": "http",
+      "url": "https://open.bigmodel.cn/api/mcp/zread/mcp",
+      "headers": {
+        "Authorization": "Bearer <YOUR_ZHIPUAI_API_KEY>"
+      }
+    },
+    "frida-mobile-mcp": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["frida-mobile-mcp"],
+      "timeout": 120000
+    }
+  }
+}

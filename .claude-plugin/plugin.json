@@ -1,0 +1,16 @@
+{
+  "name": "apk-origin",
+  "description": "APK 跨渠道来源一致性核查（AppGallery vs Google Play）。开箱即用：内置 jadx CLI + Android build-tools（apksigner/aapt）+ 多 Agent 并行分析工作流，检测仿冒/重打包/后门注入。",
+  "version": "1.0.0",
+  "author": {
+    "name": "Yonglun Yao",
+    "email": "yonglunyao@gmail.com"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/yonglunyao/apk-origin",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yonglunyao/apk-origin.git"
+  },
+  "keywords": ["android", "apk", "security", "reverse-engineering", "appgallery", "google-play", "provenance"]
+}
