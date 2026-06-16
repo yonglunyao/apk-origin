@@ -8,9 +8,6 @@
   },
   "license": "MIT",
   "homepage": "https://github.com/yonglunyao/apk-origin",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/yonglunyao/apk-origin.git"
-  },
+  "repository": "https://github.com/yonglunyao/apk-origin.git",
   "keywords": ["android", "apk", "security", "reverse-engineering", "appgallery", "google-play", "provenance"]
 }
