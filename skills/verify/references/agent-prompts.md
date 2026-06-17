@@ -13,6 +13,9 @@
 - `{ag_strings_json}` / `{gp_strings_json}` — `.strings` 全字段（含 urls/ips/secrets）
 - `{ag_package}` / `{gp_package}` — `.meta.package` 字段
 - `{ag_apk_path}` / `{gp_apk_path}` — APK 文件路径
+- `{ag_cert_dn}` / `{gp_cert_dn}` — `.certs.cert_dn` 字段
+- `{ag_label}` / `{gp_label}` — `.meta.label` 字段
+- `{plugin_root}` — **插件根目录绝对路径**（主 agent 在 Phase 0 已算出；启动依赖 bin/ 工具的 subagent——主要是 Agent E——前**必须**替换此变量并写入 prompt 顶部，否则 subagent 无法定位 ndk-tools）
 - `{package_name}` — 应用包名（同 {ag_package}）
 
 **替换示例**：从 `ag.json` 取 `.certs` 字段值，替换 prompt 中的 `{ag_certs_json}`：
@@ -220,12 +223,16 @@ GP .so 库列表：{gp_libs}
 
 APK 路径：AG={ag_apk_path}，GP={gp_apk_path}
 
-## 工具（插件内置，session 临时 PATH）
+## 工具（插件内置 ndk-tools；subagent 须自己定位——主 agent 的 PATH 不跨进程）
 
-每个 Bash 调用开头执行（env 不跨调用，故每次重设；不写用户环境变量）：
-  PLUGIN_ROOT="$(cd "<skill_base>/../.." && pwd)"
-  export PATH="$PLUGIN_ROOT/bin/ndk-tools:$PATH"
-此后 strings / readelf / nm / objdump 在该 Bash 内直接可用。从 APK 提取 .so 用 unzip（Git Bash 自带）或 Python zipfile。
+**重要**：你是独立 subagent，主 agent 的 `export PATH` 对你无效。需在自己每个 Bash 调用里定位 ndk-tools：
+
+主 agent 会在本 prompt 顶部注入「插件根目录：<绝对路径>」（即 `{plugin_root}` 变量）。若已注入，在每个 Bash 调用开头执行：
+  export PATH="<插件根>/bin/ndk-tools:$PATH"
+若未注入（占位符未替换），自探测兜底：
+  NDK=$(find /d /c "$HOME" -maxdepth 8 -type d -name ndk-tools 2>/dev/null | head -1); [ -n "$NDK" ] && export PATH="$NDK:$PATH"
+
+此后该 Bash 内 strings / readelf / nm / objdump 可用。从 APK 提取 .so 用 unzip（Git Bash 自带）或 Python zipfile。
 
 ## 分析步骤
 
@@ -378,7 +385,7 @@ Phase 0 已反编译到 `results/<应用名>_<YYYYMMDD>/jadx/ag/sources/` 和 `g
 
 ## 输入
 
-APK 基本信息（由主控在启动 I 时提供）：
+APK 基本信息（由主 agent在启动 I 时提供）：
 - 包名：{package_name}
 - 应用名：{ag_label}
 - 证书 DN（来自 ag.json）：{ag_cert_dn}
@@ -509,7 +516,7 @@ P0 全通过, P1 (D|E|F|G|H) 任一红旗 → 疑似篡改 (置信度:中)
 
 ## 输入
 
-报告路径：{report_path}（主控提供，形如 results/<应用名>_<YYYYMMDD>/<包名>_同源核查报告.md）
+报告路径：{report_path}（主 agent提供，形如 results/<应用名>_<YYYYMMDD>/<包名>_同源核查报告.md）
 参照模板：references/report-template.md（可用 Read 读取比对）
 
 ## 校验 checklist
@@ -557,8 +564,8 @@ P0 全通过, P1 (D|E|F|G|H) 任一红旗 → 疑似篡改 (置信度:中)
 
 ## 工作流
 
-- 主控在 S 生成报告后启动 Q
+- 主 agent在 S 生成报告后启动 Q
 - verdict="通过" → 工作流结束
-- verdict="需修正" → 主控将 fatal_issues + important_issues 的 fix_instruction 反馈给 S，S **仅修改不符合项**（保留已正确内容，不重写全文），保存后由 Q 复检；最多 1 轮
-- 复检仍不通过 → 主控接受当前报告，向用户汇报时标注剩余规范性问题
+- verdict="需修正" → 主 agent将 fatal_issues + important_issues 的 fix_instruction 反馈给 S，S **仅修改不符合项**（保留已正确内容，不重写全文），保存后由 Q 复检；最多 1 轮
+- 复检仍不通过 → 主 agent接受当前报告，向用户汇报时标注剩余规范性问题
 ```

@@ -13,6 +13,7 @@ description: "Compare two APKs from different distribution channels (AppGallery 
 - **一次反编译**：Phase 0 用 jadx CLI 统一反编译，P1 的 Agent 禁止再次调用 jadx 反编译，只 grep/read 已有 `.java` 源码
 - **并行约束**：每层并行 Agent ≤ 10 个
 - **⚠️ 必须用 Task 工具启动 subagent**：P0/P1/Q 的每个 Agent 都是一次独立的 Task 工具调用（`subagent_type="general-purpose"`），同层多个 Agent 放在**同一条消息**里并行启动。**主 agent 只负责编排（启动 subagent、收集结果、汇总报告），禁止自己顺序执行分析维度**——这是本 skill 的核心架构，违反会导致失去并行加速和上下文隔离。S（汇总）由主 agent 自己做（已持有全部 subagent 输出）。
+- **⚠️ subagent 上下文隔离**：每个 subagent 是全新上下文，不读 SKILL.md，主 agent 的 `export PATH` 也**不跨 subagent 进程**。因此启动依赖插件内置工具的 subagent（**主要是 Agent E 用 ndk-tools**）前，主 agent 必须在该 subagent 的 prompt 顶部注入「插件根目录：<PLUGIN_ROOT 绝对路径>」（替换 `{plugin_root}` 变量），让 subagent 自己 export PATH 定位 `bin/ndk-tools`。
 - **按需深入**：Agent 以 apk_extract.py JSON 为基线，自主决定是否调用 jadx/readelf/WebSearch 深入
 - **临时文件集中管理**：所有分析产物必须写入 `results/<应用名>_<日期>/`，禁止散落到项目根目录
 
@@ -94,16 +95,19 @@ results/<应用名>_<YYYYMMDD>/
 - apk_extract.py 输出字段：`.meta`、`.certs`、`.components`、`.files`、`.strings`（含 `.urls`、`.ips`、`.secrets`）
 - 需要 Android build-tools（apksigner/aapt）
 
-**变量提取快捷命令**（启动 Agent 前替换 `{变量}`，避免手抄 JSON）：
+**变量提取与注入**（启动 subagent 前替换 `{变量}`）：
+
+主 agent 在 Phase 0 已算出 `PLUGIN_ROOT`（插件根绝对路径）。启动每个 subagent 前：① 用下面命令从 ag.json/gp.json 提取各 {变量} 值填入 prompt；② **Agent E** 还须在 prompt 顶部注入「插件根目录：<PLUGIN_ROOT>」（替换 `{plugin_root}`），否则它无法定位 ndk-tools。
 
 ```bash
-# Agent A: 证书  |  Agent B: URL/IP/secrets  |  Agent C: 元信息+组件  |  Agent E: .so列表
-python -c "import json; d=json.load(open('results/<应用名>_<YYYYMMDD>/ag.json')); print(json.dumps(d['certs']))"
-python -c "import json; d=json.load(open('results/<应用名>_<YYYYMMDD>/ag.json')); print('urls:', d['strings']['urls'][:5], '...共', len(d['strings']['urls']), '个')"
-python -c "import json; d=json.load(open('results/<应用名>_<YYYYMMDD>/ag.json')); print('meta:', json.dumps(d['meta'])); print('components:', json.dumps(d['components']))"
-python -c "import json; d=json.load(open('results/<应用名>_<YYYYMMDD>/ag.json')); print(json.dumps(d['files']['libs']))"
+# 通用 dump（按需切片填入各 {变量}）
+python -c "import json,pprint; d=json.load(open('results/<应用名>_<YYYYMMDD>/ag.json')); pprint.pprint(d)"
+# 常用字段（certs/cert_dn/label/urls/ips/secrets/libs/package/strings）
+python -c "import json; d=json.load(open('results/<应用名>_<YYYYMMDD>/ag.json')); print('certs:',d['certs'],'| cert_dn:',d['certs']['cert_dn'],'| label:',d['meta']['label'])"
+python -c "import json; d=json.load(open('results/<应用名>_<YYYYMMDD>/ag.json')); print('urls:',d['strings']['urls'],'| ips:',d['strings']['ips'],'| secrets:',d['strings'].get('secrets'))"
+python -c "import json; d=json.load(open('results/<应用名>_<YYYYMMDD>/ag.json')); print('libs:',d['files']['libs'],'| package:',d['meta']['package'],'| components:',d['components'])"
 ```
-GP 侧同理。Agent I 不需要 JSON（纯 WebSearch）。
+GP 侧同理（换 gp.json）。Agent I 纯 WebSearch，但需 `{ag_cert_dn}` / `{ag_label}` / `{package_name}` 三个字段。
 
 ### P0：关键信号（4 个并行 subagent，~2分钟）
 
@@ -164,7 +168,7 @@ P1 完成后直接进入 S 汇总判定。**无 P2 阶段**（原 P2 仅剩 H，
 | Q 判定 | 处理 |
 |--------|------|
 | 通过 | 工作流结束，向用户汇报最终结论 |
-| 需修正 | 将 Q 输出的 fatal_issues / important_issues 的 `fix_instruction` 反馈给 S，S **仅修改不符合项**（保留已正确内容，不重写全文）后保存 → Q 复检 |
+| 需修正 | 将 Q 输出的 fatal_issues / important_issues 的 `fix_instruction` 反馈给 **主 agent（即 S 阶段的执行者）**，主 agent 用 Edit **仅修改报告不符合项**（保留已正确内容，不重写全文、不再起 subagent）→ 再启动 Q subagent 复检 |
 | 复检仍不通过 | 接受当前报告，向用户汇报时标注剩余规范性问题 |
 
 ## 决策规则

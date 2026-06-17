@@ -162,7 +162,7 @@ cd D:/temp/apk-analyse
 Compress-Archive -Path apk-origin -DestinationPath apk-origin.zip
 ```
 
-`bin/` 二进制约 156M（jadx 61M + build-tools 52M + ndk-tools 43M）；含 `.git` 全仓库约 250M，打包分发前可排除 `.git`。
+`bin/` 二进制约 156M（jadx 61M + build-tools 52M + ndk-tools 43M）；含 `.git` 全仓库约 263M，打包分发前可排除 `.git`。
 
 ---
 

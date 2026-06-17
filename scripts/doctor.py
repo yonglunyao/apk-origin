@@ -22,6 +22,11 @@ def main():
     jadx_dir = bin_dir / "jadx-1.5.5"
     bt_dir = bin_dir / "build-tools"
 
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
     print("=" * 62)
     print(" APK Origin Verify Toolkit - 环境自检")
     print(" 插件目录: " + str(plugin_root))
@@ -47,6 +52,7 @@ def main():
     checks.append(("插件内置 apksigner.jar", (bt_dir / "lib" / "apksigner.jar").is_file(),
                    str(bt_dir / "lib" / "apksigner.jar")))
     checks.append(("插件内置 dexdump.exe", (bt_dir / "dexdump.exe").is_file(), str(bt_dir / "dexdump.exe")))
+    checks.append(("插件内置 aapt2.exe", (bt_dir / "aapt2.exe").is_file(), str(bt_dir / "aapt2.exe")))
     dlls = ["libLLVM_android.dll", "libclang_android.dll", "libbcc.dll", "libbcinfo.dll", "libwinpthread-1.dll"]
     missing_dll = [d for d in dlls if not (bt_dir / d).is_file()]
     checks.append(("插件内置 runtime dll (5个)", not missing_dll,
