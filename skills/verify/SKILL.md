@@ -12,6 +12,7 @@ description: "Compare two APKs from different distribution channels (AppGallery 
 - **分层递进**：P0 → P1 逐层深入，全部执行完毕后才汇总判定
 - **一次反编译**：Phase 0 用 jadx CLI 统一反编译，P1 的 Agent 禁止再次调用 jadx 反编译，只 grep/read 已有 `.java` 源码
 - **并行约束**：每层并行 Agent ≤ 10 个
+- **⚠️ 必须用 Task 工具启动 subagent**：P0/P1/Q 的每个 Agent 都是一次独立的 Task 工具调用（`subagent_type="general-purpose"`），同层多个 Agent 放在**同一条消息**里并行启动。**主 agent 只负责编排（启动 subagent、收集结果、汇总报告），禁止自己顺序执行分析维度**——这是本 skill 的核心架构，违反会导致失去并行加速和上下文隔离。S（汇总）由主 agent 自己做（已持有全部 subagent 输出）。
 - **按需深入**：Agent 以 apk_extract.py JSON 为基线，自主决定是否调用 jadx/readelf/WebSearch 深入
 - **临时文件集中管理**：所有分析产物必须写入 `results/<应用名>_<日期>/`，禁止散落到项目根目录
 
@@ -104,67 +105,59 @@ python -c "import json; d=json.load(open('results/<应用名>_<YYYYMMDD>/ag.json
 ```
 GP 侧同理。Agent I 不需要 JSON（纯 WebSearch）。
 
-### P0：关键信号（4 Agent 并行，~2分钟）
+### P0：关键信号（4 个并行 subagent，~2分钟）
 
-**在同一轮消息中同时发起以下 4 个 Agent 调用**（并行，非串行）：
+> ⚠️ **强制：必须用 Task 工具启动 subagent，禁止主 agent 自己顺序执行**。在**同一条消息**里发起 4 个 Task 工具调用（`subagent_type="general-purpose"`），每个调用的 `prompt` 参数 = 对应 Agent 的完整 prompt。4 个 subagent **并行**执行。并行 subagent 是本 skill 的核心设计（隔离上下文 / 并行 4 倍加速 / 防止主 agent 上下文污染），主 agent 自己顺序做这 4 个维度会违背设计且慢 4 倍——**不要这样做**。
 
-| Agent | 标签 | 职责 | 关键输入 |
-|-------|------|------|---------|
-| B | 网络端点差异 | URL/IP/域名 diff + whois + 威胁情报 | ag.json `.strings`、gp.json `.strings` |
-| A | 开发者身份与证书 | 以 GP/App Store 为基准确认身份 + 识别双平台重签名 | ag.json `.certs`、gp.json `.certs` |
-| C | Manifest 高危差异 | 权限/组件 diff + debuggable/minSdk 异常检测 | ag.json `.meta`+`.components`、gp.json 对应字段 |
-| I | 网络情报交叉验证 | 搜索应用画像/仿冒/诈骗/监管/安全事件 | WebSearch |
+每个 subagent 的 `prompt` = 从 `references/agent-prompts.md` 复制对应 `## Agent X` 段全文（替换 {变量} 后）传入。
 
-启动方式（四个 Agent 并行调用）：
+| Agent | subagent 职责 | 关键输入 | prompt 来源 |
+|-------|---------------|---------|-----------|
+| B | 网络端点差异 | ag/gp.json `.strings` | `## Agent B` |
+| A | 开发者身份与证书 | ag/gp.json `.certs` | `## Agent A` |
+| C | Manifest 高危差异 | ag/gp.json `.meta`+`.components` | `## Agent C` |
+| I | 网络情报交叉验证 | WebSearch | `## Agent I` |
 
-```
-Agent: (完整 prompt 从 agent-prompts.md Agent B 获取，替换 {变量})
-Agent: (完整 prompt 从 agent-prompts.md Agent A 获取，替换 {变量})
-Agent: (完整 prompt 从 agent-prompts.md Agent C 获取，替换 {变量})
-Agent: (完整 prompt 从 agent-prompts.md Agent I 获取，替换 {变量})
-```
+**一条消息内 4 个 Task 工具调用并行**（每个的 prompt = 对应 Agent 完整模板）：
+
+- Task(subagent_type="general-purpose", description="Agent B 网络端点", prompt=<Agent B 模板>)
+- Task(subagent_type="general-purpose", description="Agent A 证书身份", prompt=<Agent A 模板>)
+- Task(subagent_type="general-purpose", description="Agent C Manifest", prompt=<Agent C 模板>)
+- Task(subagent_type="general-purpose", description="Agent I 网络情报", prompt=<Agent I 模板>)
 
 P0 完成后继续执行 P1，不做提前终止。**每阶段完成后向用户汇报该阶段所有 Agent 的结论摘要。**
 
-### P1：结构分析（5 Agent 并行，~2分钟）
+### P1：结构分析（5 个并行 subagent，~2分钟）
 
-P0 完成后无论结果如何均继续执行。**在同一轮消息中同时发起以下 5 个 Agent 调用**：
+P0 完成后无论结果如何均继续执行。> ⚠️ **同样强制用 Task 工具**：在**同一条消息**里发 5 个 Task 工具调用（`subagent_type="general-purpose"`），5 个 subagent 并行。**禁止主 agent 自己顺序做**（理由同 P0）。
 
-| Agent | 标签 | 职责 | 关键工具 |
-|-------|------|------|---------|
-| D | 入口点注入检测 | 对比 Application/主Activity 初始化逻辑 | grep/jadx 源码（Phase 0 共享） |
-| E | Native .so 差异 | .so 存在性 diff + AG 独有 .so 字符串/符号分析 | readelf/strings |
-| F | 硬编码敏感值 | 密钥/JWT/私钥头正则扫描 + AG 独有值上下文验证 | grep/jadx 源码 + apk_extract.py |
-| G | 安全机制对比 | root检测/模拟器检测/frida检测/SSL pinning 两包对比 | grep/jadx 源码 |
-| H | 核心安全逻辑 | 助记词熵源/私钥存储/种子外传（钱包/金融重点）| grep/jadx 源码 |
+| Agent | subagent 职责 | 关键工具 | prompt 来源 |
+|-------|---------------|---------|-----------|
+| D | 入口点注入检测 | grep/jadx 源码（Phase 0 共享） | `## Agent D` |
+| E | Native .so 差异 | readelf/strings | `## Agent E` |
+| F | 硬编码敏感值 | grep/jadx 源码 + apk_extract.py | `## Agent F` |
+| G | 安全机制对比 | grep/jadx 源码 | `## Agent G` |
+| H | 核心安全逻辑 | grep/jadx 源码 | `## Agent H` |
 
-```
-Agent: (完整 prompt 从 agent-prompts.md Agent D 获取)
-Agent: (完整 prompt 从 agent-prompts.md Agent E 获取)
-Agent: (完整 prompt 从 agent-prompts.md Agent F 获取)
-Agent: (完整 prompt 从 agent-prompts.md Agent G 获取)
-Agent: (完整 prompt 从 agent-prompts.md Agent H 获取)
-```
+**一条消息内 5 个 Task 工具调用并行**（每个的 prompt = 对应 Agent 完整模板）：
+
+- Task(subagent_type="general-purpose", description="Agent D 入口点", prompt=<Agent D 模板>)
+- Task(subagent_type="general-purpose", description="Agent E .so", prompt=<Agent E 模板>)
+- Task(subagent_type="general-purpose", description="Agent F 敏感值", prompt=<Agent F 模板>)
+- Task(subagent_type="general-purpose", description="Agent G 安全机制", prompt=<Agent G 模板>)
+- Task(subagent_type="general-purpose", description="Agent H 核心逻辑", prompt=<Agent H 模板>)
 
 P1 完成后直接进入 S 汇总判定。**无 P2 阶段**（原 P2 仅剩 H，已并入 P1）。
 
 ### S：汇总判定
 
-启动 Agent S，读取所有已完成 Agent 的输出，按决策规则判定，按报告模板输出。
+**主 agent 汇总**（不需要 Task subagent——主 agent 已持有 P0/P1 全部 9 个 subagent 的输出）：按决策规则判定，按 `references/report-template.md` 结构输出完整 Markdown 报告，保存到 `results/<应用名>_<YYYYMMDD>/<包名>_同源核查报告.md`。汇总时参照 `references/agent-prompts.md` 的 `## Agent S` 模板（冲突裁决、场景分析等）。
 
-```
-Agent: (完整 prompt 从 agent-prompts.md Agent S 获取)
-将 P0–P1 所有 Agent 的输出作为输入传给 S。
-```
+### Q：报告规范性校验（1 个 Task subagent）
 
-### Q：报告规范性校验
+> ⚠️ **强制用 Task 工具启动 Q subagent**（`subagent_type="general-purpose"`），不要主 agent 自己跳过校验。Q 用 Read 工具读取报告，对照 `references/report-template.md` 逐项校验结构 / 格式 / 必备要素（**不评判同源结论**）。详细 checklist 见 `references/agent-prompts.md` 的 `## Agent Q`。
 
-S 生成报告后，启动 Agent Q。Q 用 Read 工具读取 S 生成的报告，对照 `references/report-template.md` 逐项校验结构 / 格式 / 必备要素（**不评判同源结论**，结论正确性是 S 的职责）。详细 checklist 见 `references/agent-prompts.md` Agent Q。
-
-```
-Agent: (完整 prompt 从 agent-prompts.md Agent Q 获取，替换 {report_path})
-报告路径：results/<应用名>_<YYYYMMDD>/<包名>_同源核查报告.md
-```
+- Task(subagent_type="general-purpose", description="Agent Q 报告校验", prompt=<Agent Q 模板，替换 {report_path} 为 `results/<应用名>_<YYYYMMDD>/<包名>_同源核查报告.md`>)
 
 **Q 判定与修正循环（最多 1 轮）**：
 
